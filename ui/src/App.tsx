@@ -1,10 +1,8 @@
+/* eslint-disable no-irregular-whitespace */
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-
-// If you want a more card-like structure for output, you could import Card components:
-// import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 
 // TypeScript interface for diff segments from the backend
 interface DiffSegment {
