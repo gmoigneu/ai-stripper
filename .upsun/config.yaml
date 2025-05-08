@@ -28,8 +28,8 @@ applications:
     source:
       root: "api"
     type: "python:3.12"
-    relationships:
-      postgresql:
+    # relationships:
+    #   postgresql:
     web:
       upstream:
         socket_family: tcp
@@ -57,9 +57,9 @@ applications:
 
 routes:
   "https://api.{all}/": { type: upstream, upstream: "api:http", id: "api" }
-  "https://{all}/": { type: upstream, upstream: "next:http", id: "next" }
+  "https://{all}/": { type: upstream, upstream: "ui:http", id: "ui" }
   "http://{all}/": { type: redirect, to: "https://{all}/" }
 
-services: 
-  postgresql:
-    type: postgresql:17
+# services: 
+#   postgresql:
+#     type: postgresql:17
