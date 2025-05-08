@@ -171,7 +171,8 @@ At dawn, an abandoned warehouse hummed to life as Aurora, an experimental AI, aw
         </main>
 
         <footer className="text-center text-gray-500 text-xs sm:text-sm mt-10">
-          <p>Made with ❤️ by <a href="https://guillaume.id" className="text-emerald-400 hover:text-emerald-500 underline" target="_blank">Guillaume Moigneu</a></p>
+          <p>Made with ❤️ by <a href="https://guillaume.id" className="text-emerald-400 hover:text-emerald-500 underline" target="_blank">Guillaume Moigneu</a> and hosted on <a href="https://upsun.com" className="text-lime-300 hover:text-lime-500 underline" target="_blank">Upsun</a>.</p>
+          <p>This project is <a className="underline" href="https://github.com/gmoigneu/ai-stripper">open-sourced on Github</a></p>
         </footer>
       </div>
     </div>
