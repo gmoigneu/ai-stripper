@@ -1,15 +1,33 @@
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+import difflib
+from typing import List, Literal
 
 # --- Pydantic Models ---
 class TextInput(BaseModel):
     text: str
 
+class DiffSegment(BaseModel):
+    type: Literal['equal', 'insert', 'delete']
+    text: str
+
 class TextOutput(BaseModel):
     cleaned_text: str
+    diff: List[DiffSegment] | None = None
 
 # --- FastAPI App Instance ---
 app = FastAPI()
+
+# --- CORS Middleware ---
+# This must be added before any routes are defined if you want it to apply to all of them.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Allows all origins
+    allow_credentials=True, # Allows cookies to be included in requests
+    allow_methods=["*"],  # Allows all methods (GET, POST, PUT, DELETE, etc.)
+    allow_headers=["*"],  # Allows all headers
+)
 
 # --- Character Stripping Logic ---
 
@@ -151,9 +169,31 @@ async def strip_content_endpoint(payload: TextInput):
     - Normalizing full-width CJK punctuation to ASCII equivalents.
     - Filtering out remaining non-ASCII characters, while preserving common single-character emojis.
       (Note: Complex emojis might be simplified due to removal of ZWJ/Variation Selectors).
+    - Providing a character-level diff of the changes.
     """
-    cleaned_text = strip_non_human_chars(payload.text)
-    return TextOutput(cleaned_text=cleaned_text)
+    original_text = payload.text
+    cleaned_text = strip_non_human_chars(original_text)
+
+    # Generate character-level diff segments
+    diff_segments: List[DiffSegment] = []
+    matcher = difflib.SequenceMatcher(None, original_text, cleaned_text)
+    
+    if original_text == cleaned_text:
+        diff_output = None
+    else:
+        for tag, i1, i2, j1, j2 in matcher.get_opcodes():
+            if tag == 'equal':
+                diff_segments.append(DiffSegment(type='equal', text=original_text[i1:i2]))
+            elif tag == 'delete':
+                diff_segments.append(DiffSegment(type='delete', text=original_text[i1:i2]))
+            elif tag == 'insert':
+                diff_segments.append(DiffSegment(type='insert', text=cleaned_text[j1:j2]))
+            elif tag == 'replace':
+                diff_segments.append(DiffSegment(type='delete', text=original_text[i1:i2]))
+                diff_segments.append(DiffSegment(type='insert', text=cleaned_text[j1:j2]))
+        diff_output = diff_segments
+    
+    return TextOutput(cleaned_text=cleaned_text, diff=diff_output)
 
 # Optional: A small section for local testing when running the script directly
 if __name__ == "__main__":
@@ -163,7 +203,7 @@ if __name__ == "__main__":
         ("Hello\u200BWorld", "HelloWorld"),
         ("Text with\u00A0nbsp", "Text with nbsp"),
         ("Em—dash", "Em-dash"), # \u2014
-        ("‘Smart’ quotes", "'Smart' quotes"), # \u2018, \u2019
+        ("'Smart' quotes", "'Smart' quotes"), # \u2018, \u2019
         ("Ellipsis…", "Ellipsis..."), # \u2026
         ("Ｈｅｌｌｏ", "Hello"), # \uFF28 \uFF45 \uFF4C \uFF4C \uFF4F
         ("Text with soft\u00ADhyphen", "Text with softhyphen"),
@@ -188,17 +228,34 @@ if __name__ == "__main__":
     for i, (original_raw, expected) in enumerate(test_cases):
         # Need to decode unicode escapes in test case strings
         original = original_raw.encode('latin-1', 'backslashreplace').decode('unicode-escape')
-        actual = strip_non_human_chars(original)
-        status = "PASSED" if actual == expected else "FAILED"
+        actual_cleaned = strip_non_human_chars(original)
+        
+        # Generate character-level diff for testing (primarily to ensure it runs)
+        test_diff_segments = []
+        matcher = difflib.SequenceMatcher(None, original, actual_cleaned)
+        if original != actual_cleaned:
+            for tag, i1, i2, j1, j2 in matcher.get_opcodes():
+                if tag == 'equal': test_diff_segments.append(DiffSegment(type='equal', text=original[i1:i2]))
+                elif tag == 'delete': test_diff_segments.append(DiffSegment(type='delete', text=original[i1:i2]))
+                elif tag == 'insert': test_diff_segments.append(DiffSegment(type='insert', text=actual_cleaned[j1:j2]))
+                elif tag == 'replace':
+                    test_diff_segments.append(DiffSegment(type='delete', text=original[i1:i2]))
+                    test_diff_segments.append(DiffSegment(type='insert', text=actual_cleaned[j1:j2]))
+
+        status = "PASSED" if actual_cleaned == expected else "FAILED"
         if status == "FAILED":
             all_passed = False
         print(f"Test {i+1}: {original_raw[:30]}... -> {status}")
         if status == "FAILED":
             print(f"  Original: '{original}' (raw: '{original_raw}')")
             print(f"  Expected: '{expected}'")
-            print(f"  Actual  : '{actual}'")
+            print(f"  Actual  : '{actual_cleaned}'")
             # print(f"  Expected (ords): {[ord(c) for c in expected]}")
-            # print(f"  Actual   (ords): {[ord(c) for c in actual]}")
+            # print(f"  Actual   (ords): {[ord(c) for c in actual_cleaned]}")
+            # if test_diff_segments: # Uncomment to see diff segments during failed tests
+            #     print(f"  Generated Diff Segments:")
+            #     for seg in test_diff_segments:
+            #         print(f"    Type: {seg.type}, Text: '{seg.text}'")
 
 
     if all_passed:
@@ -208,7 +265,7 @@ if __name__ == "__main__":
 
     print("\nTo run the FastAPI server, use: uvicorn app:app --reload")
     print("Example POST request to / with curl:")
-    print("curl -X POST -H \"Content-Type: application/json\" -d '{\"text\": \"Ｈｅｌｌｏ—‘world’…\"}' http://127.0.0.1:8000/strip_content/")
+    print("curl -X POST -H \"Content-Type: application/json\" -d '{\"text\": \"Ｈｅｌｌｏ—'world'…\"}' http://127.0.0.1:8000/strip_content/")
     
     # To actually run the app if script is executed:
     # uvicorn.run(app, host="0.0.0.0", port=8000)

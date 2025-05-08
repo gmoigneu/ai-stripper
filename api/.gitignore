@@ -4,3 +4,11 @@ logs
 .venv
 .env
 !.env.example
+
+__pycache__/**
+*.pyc
+*.pyo
+*.pyd
+*.pyw
+*.pyz
+*.pywz
