@@ -1,0 +1,65 @@
+applications:
+  ui:
+    source:
+      root: "ui"
+    type: nodejs:22
+    build:
+      flavor: none
+    web:
+      locations:
+        "/":
+          passthru: true
+      commands:
+        start: "http-server dist/ --cors"
+      upstream:
+        socket_family: tcp
+    mounts:
+      "/.npm":
+        source: "storage"
+        source_path: "npm"
+    hooks:
+      build: |
+        set -x -e
+        npm install
+        npm install -g http-server
+        npm run build
+  api:
+    container_profile: HIGH_MEMORY
+    source:
+      root: "api"
+    type: "python:3.12"
+    relationships:
+      postgresql:
+    web:
+      upstream:
+        socket_family: tcp
+      commands:
+        start: "uvicorn app:app --port $PORT --workers 4"
+      locations:
+        "/":
+          passthru: true
+    mounts:
+      "__pycache__":
+        source: "storage"
+        source_path: "python"
+    build:
+      flavor: none
+    dependencies:
+      python3:
+        uvicorn: "*"
+    hooks:
+      build: |
+        set -eux
+        pip install -r requirements.txt
+      deploy: |
+        set -eux
+        # alembic upgrade head
+
+routes:
+  "https://api.{all}/": { type: upstream, upstream: "api:http", id: "api" }
+  "https://{all}/": { type: upstream, upstream: "next:http", id: "next" }
+  "http://{all}/": { type: redirect, to: "https://{all}/" }
+
+services: 
+  postgresql:
+    type: postgresql:17
